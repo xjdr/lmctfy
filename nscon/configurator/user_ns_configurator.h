@@ -50,6 +50,7 @@ class UserNsConfigurator : public NsConfigurator {
   ::util::Status WriteIdMap(
       const string &id_map_path,
       const ::std::vector<IdMapEntry> &id_map) const;
+  ::util::Status ProcSetGroupsWrite(pid_t child_pid) const;
   ::util::Status SetupUserNamespace(const UserNsSpec &user_spec,
                                     pid_t init_pid) const;
   ::util::StatusOr<::std::vector<IdMapEntry>> ValidateIdMap(

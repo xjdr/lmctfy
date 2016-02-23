@@ -19,6 +19,7 @@
 
 #include <fcntl.h>
 #include <vector>
+#include <string>
 
 #include "file/base/path.h"
 #include "include/namespaces.pb.h"
@@ -31,6 +32,7 @@
 using ::system_api::GlobalLibcFsApi;
 using ::system_api::ScopedFileCloser;
 using ::std::vector;
+using ::std::string;
 using ::strings::Substitute;
 using ::util::Status;
 using ::util::StatusOr;
@@ -93,6 +95,34 @@ StatusOr<vector<IdMapEntry>> UserNsConfigurator::ValidateIdMap(
   return id_list;
 }
 
+
+Status UserNsConfigurator::ProcSetGroupsWrite(pid_t child_pid) const {
+  const string set_group_file = Substitute("/proc/$0/setgroups", child_pid);
+  int fd = GlobalLibcFsApi()->Open(set_group_file.c_str(), O_WRONLY);
+  if (fd < 0) {
+    return Status(::util::error::INTERNAL,
+                  Substitute("open($0) failed: $1", set_group_file,
+                             strerror(errno)));
+  }
+  // Auto-close the 'fd' on error.
+  ScopedFileCloser fd_closer(fd);
+
+  string data("deny");
+  if (GlobalLibcFsApi()->Write(fd, data.c_str(), data.length()) < 0) {
+    return Status(::util::error::INTERNAL,
+                  Substitute("write($0) failed: $1", set_group_file,
+                             strerror(errno)));
+  }
+  fd_closer.Cancel();
+  if (GlobalLibcFsApi()->Close(fd) < 0) {
+    return Status(::util::error::INTERNAL,
+                  Substitute("close($0) failed: $1", set_group_file,
+                             strerror(errno)));
+  }
+
+  return Status::OK;
+}
+
 Status UserNsConfigurator::SetupUserNamespace(const UserNsSpec &user_spec,
                                               pid_t init_pid) const {
   if (user_spec.uid_map_size()) {
@@ -119,6 +149,7 @@ UserNsConfigurator::SetupOutsideNamespace(const NamespaceSpec &spec,
     return Status::OK;
   }
 
+  RETURN_IF_ERROR(ProcSetGroupsWrite(init_pid));
   return SetupUserNamespace(spec.user(), init_pid);
 }
 
