@@ -347,13 +347,18 @@ Status FilesystemConfigurator::SetupInsideNamespace(
   }
 
   RETURN_IF_ERROR(PrepareFilesystem(whitelisted_mounts, rootfs_path));
+
+  // The proc and sys mounts used to be after the pivot_root call.  But it
+  // doesn't work with the latest kernel version.  So they have to be moved
+  // ahead to have the mount happen first.
+  RETURN_IF_ERROR(SetupProcfs(::file::JoinPath(rootfs_path, kDefaultProcfsPath)));
+  RETURN_IF_ERROR(SetupSysfs(::file::JoinPath(rootfs_path, kDefaultSysfsPath)));
+
   if (chroot_to_rootfs) {
     RETURN_IF_ERROR(SetupChroot(rootfs_path));
   } else {
     RETURN_IF_ERROR(SetupPivotRoot(rootfs_path));
   }
-  RETURN_IF_ERROR(SetupProcfs(kDefaultProcfsPath));
-  RETURN_IF_ERROR(SetupSysfs(kDefaultSysfsPath));
 
   const bool needs_console = spec.has_run_spec() &&
       spec.run_spec().has_console() &&
